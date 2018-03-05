@@ -1,0 +1,11 @@
+﻿{
+  "compilerOptions": {
+    "strict": true,
+    "removeComments": false,
+    "target": "es6",
+    "module": "amd",
+    "declaration": false,
+    "sourceMap": true,
+    "rootDir": "./"
+  }
+}
