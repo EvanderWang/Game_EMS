@@ -1,5 +1,11 @@
 import { VGUID } from "../Lib/Std/guid";
 
-let i = new VGUID();
+module module_main{
+    export function main(){
+        let i = new VGUID();
 
-console.log(i.toString());
+        console.log(i.toString());
+    }
+}
+
+export { module_main }
