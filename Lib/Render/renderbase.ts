@@ -190,7 +190,7 @@ module renderbase {
 
     class VProgramRenderer implements irender.IVProgramRenderer {
         curusedtexpos = 0;
-        texturePosToActivePos: map.Map<WebGLUniformLocation, number>;
+        texturePosToActivePos: Map<WebGLUniformLocation, number>;
 
         constructor(private gl: WebGLRenderingContext
             , private program: WebGLProgram
@@ -201,7 +201,7 @@ module renderbase {
             , private fboColorTexMngr: VImpMngr<irender.IVTexture2D, VColorAttachment>
             , private fboDepthTexMngr: VImpMngr<irender.IVTexture2D, VDepthAttachment>
         ) {
-            this.texturePosToActivePos = new map.Map<WebGLUniformLocation, number>();
+            this.texturePosToActivePos = new Map<WebGLUniformLocation, number>();
             this.initState();
         }
 

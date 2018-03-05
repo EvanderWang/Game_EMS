@@ -1,6 +1,7 @@
 ﻿{
   "compilerOptions": {
-    "strict": true,
+    "strict": false,
+    "strictPropertyInitialization": false,
     "removeComments": false,
     "target": "es6",
     "module": "amd",

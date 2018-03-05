@@ -1,6 +1,6 @@
-﻿import { matrix } from "../../Base/math/matrix";
-import { vector } from "../../Base/math/vector";
-import { VGUID } from "../../Base/std/guid";
+﻿import { matrix } from "../Math/matrix";
+import { vector } from "../Math/vector";
+import { VGUID } from "../Std/guid";
 
 module irender {
     export interface IVGpuRes {
