@@ -1,6 +1,0 @@
-define(["require", "exports", "./EmptyObservable"], function (require, exports, EmptyObservable_1) {
-    "use strict";
-    Object.defineProperty(exports, "__esModule", { value: true });
-    exports.empty = EmptyObservable_1.EmptyObservable.create;
-});
-//# sourceMappingURL=empty.js.map

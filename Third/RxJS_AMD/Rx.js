@@ -1,4 +1,4 @@
-define(function (require, exports, module) {"use strict";
+define(function (require, exports, module) {
 /* tslint:disable:no-unused-variable */
 // Subject imported before Observable to bypass circular dependency issue since
 // Subject extends Observable and Observable references Subject in it's
