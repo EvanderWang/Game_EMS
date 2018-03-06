@@ -3,3 +3,5 @@
 *.d.ts
 !Third/**
 !AmdLoader/**
+AmdLoader/requireconfig.js
+AmdLoader/requireconfig.js.map

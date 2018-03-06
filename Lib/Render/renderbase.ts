@@ -122,22 +122,13 @@ module renderbase {
         texture: WebGLTexture;
 
         constructor(private gl: WebGLRenderingContext, w: number, h: number, texData: Float32Array, private mngr: VImpMngr<irender.IVTexture2D, VTexture2D>) {
-            //extChecker.alertCheck('OES_texture_float');
-            //extChecker.alertCheck('OES_texture_float_linear');
-            let halfFloat = extChecker.alertCheck('OES_texture_half_float');
-            extChecker.alertCheck('OES_texture_half_float_linear');
+            extChecker.alertCheck('OES_texture_float');
+            extChecker.alertCheck('OES_texture_float_linear');
             this.width = w;
             this.height = h;
             this.texture = <WebGLTexture>gl.createTexture();
             gl.bindTexture(gl.TEXTURE_2D, this.texture);
-            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w, h, 0, gl.RGBA, halfFloat.HALF_FLOAT_OES, texData);
-            //if (this.width == this.height && isPowerOf2(this.width) && isPowerOf2(this.height)) {
-            //    gl.generateMipmap(gl.TEXTURE_2D);
-            //} else {
-            //    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-            //    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-            //    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-            //}
+            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w, h, 0, gl.RGBA, gl.FLOAT, texData);
             gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
             gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
             gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
@@ -158,22 +149,13 @@ module renderbase {
         texture: WebGLTexture;
 
         constructor(private gl: WebGLRenderingContext, image: ImageBitmap | ImageData | HTMLVideoElement | HTMLImageElement | HTMLCanvasElement, private mngr: VImpMngr<irender.IVTexture2D, VTextureImage2D>) {
-            //extChecker.alertCheck("OES_texture_float");
-            //extChecker.alertCheck('OES_texture_float_linear');
-            let halfFloat = extChecker.alertCheck('OES_texture_half_float');
-            extChecker.alertCheck('OES_texture_half_float_linear');
+            extChecker.alertCheck("OES_texture_float");
+            extChecker.alertCheck('OES_texture_float_linear');
             this.width = image.width;
             this.height = image.height;
             this.texture = <WebGLTexture>gl.createTexture();
             gl.bindTexture(gl.TEXTURE_2D, this.texture);
-            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, halfFloat.HALF_FLOAT_OES, image);
-            //if (this.width == this.height && isPowerOf2(this.width) && isPowerOf2(this.height)) {
-            //    gl.generateMipmap(gl.TEXTURE_2D);
-            //} else {
-            //    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-            //    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-            //    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-            //}
+            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.FLOAT, image);
             gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
             gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
             gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
