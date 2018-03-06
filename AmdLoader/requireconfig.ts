@@ -3,9 +3,6 @@
     // paths: {
     //     jquery: jqueryPath,
     //     alioss: aliossPath,
-    //     //opentype: opentypePath,// 仅用于生成文字网格 发布时不允许使用
-    //     //contours: contoursPath,// 仅用于生成文字网格 发布时不允许使用
-    //     //triangulate: triangulatePath,// 仅用于生成文字网格 发布时不允许使用
     // },
     // map: {
     //     '*': {
