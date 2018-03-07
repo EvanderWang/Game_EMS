@@ -21,6 +21,7 @@ module module_main{
             scene.dirty();
             rtx.resize(window.innerWidth, window.innerHeight);
 
+            
             dorender();
         } );
 
