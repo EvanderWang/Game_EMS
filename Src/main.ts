@@ -22,12 +22,24 @@ module module_main{
             rtx.defaultRenderTarget.render();
         }); 
 
-        GamepadsCollector.gamepadCollector.TrackEventButton(GamepadsCollector.VEButtonType.A, GamepadsCollector.VEButtonEventType.LongPress).subscribe(( gamepad: GamepadsCollector.IVGamepad )=>{ console.log("A"); });
+        let sel = GamepadsCollector.gamepadCollector.TrackEventButton(GamepadsCollector.VEButtonType.A, GamepadsCollector.VEButtonEventType.Press).subscribe(( gamepad: GamepadsCollector.IVGamepad )=>{ 
+            sel.unsubscribe();
+            scene.setClearColor(0,1,0,1);
+            scene.dirty();
+            gamepad.TrackEventAxis(GamepadsCollector.VEAxisType.Right).subscribe( (val: GamepadsCollector.VSAxisDirLevelChange)=>{
+                console.log(GamepadsCollector.VSAxisDir[val.dir]);
+            } );
+
+            gamepad.TrackEventButton(GamepadsCollector.VEButtonType.A)
+            .filter( ( evttype: GamepadsCollector.VEButtonEventType )=>{ return evttype == GamepadsCollector.VEButtonEventType.Press } )
+            .subscribe( ()=>{
+                console.log("A");
+            } );
+        });
         
         const sceneresize$ = Rx.Observable.fromEvent(window, "resize");
         sceneresize$.subscribe( () => { 
-            scene.setClearColor(0,1,0,1);
-            scene.dirty();
+            
             rtx.resize(window.innerWidth, window.innerHeight);
         } );
     }

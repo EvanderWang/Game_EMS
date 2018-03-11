@@ -28,7 +28,7 @@ module GamepadsCollector {
         Left,
         Right,
 
-        Size = 4,
+        Size,
     }
     
     export enum VEButtonEventType {
@@ -36,9 +36,21 @@ module GamepadsCollector {
         LongPress,
     }
 
-    export enum VEAxisEventType {
-        LevelChange, // level 0 == not press , level 1 == half push , level 2 == full push
-        EightDirChange,
+    export enum VSAxisLevel {
+        NotPush,
+        HalfPush,
+        FullPush,
+    }
+
+    export enum VSAxisDir {
+        N,
+        S,
+        W,
+        E,
+        NW,
+        NE,
+        SW,
+        SE,
     }
 
     export interface VSButtonState {
@@ -51,22 +63,29 @@ module GamepadsCollector {
         y: number;
     }
 
+    export interface VSAxisDirLevelChange {
+        level: VSAxisLevel;
+        dir: VSAxisDir;
+    }
+
     export interface IVGamepad {
         TrackStateButton: (button: VEButtonType) => Rx.Observable<VSButtonState>;
         TrackEventButton: (button: VEButtonType) => Rx.Observable<VEButtonEventType>;
-        // TrackStateAxis: (axis:VEAxisType) => Rx.Observable<VSAxisState>;
-        // TrackEventAxis: (axis:VEAxisType) => Rx.Observable<VEAxisEventType>;
+        TrackStateAxis: (axis:VEAxisType) => Rx.Observable<VSAxisState>;
+        TrackEventAxis: (axis:VEAxisType) => Rx.Observable<VSAxisDirLevelChange>;
     }
     
     export interface IVGamepadsCollector {
         TrackEventButton: (button:VEButtonType, evttype:VEButtonEventType) => Rx.Observable<IVGamepad>;
-        // TrackEventAxis: (axis:VEAxisType, evttype:VEAxisEventType) => Rx.Observable<IVGamepad>;
+        TrackEventAxis: (axis:VEAxisType, evttype:VSAxisDirLevelChange) => Rx.Observable<IVGamepad>;
     }
     
     class VGamepad implements IVGamepad {
         globalAnimationFrameSubscription: RxSubScription.AnonymousSubscription;
         buttonstates: Array<Rx.Subject<VSButtonState>>;
         buttonevents: Array<Rx.Subject<VEButtonEventType>>;
+        axisstates: Array<Rx.Subject<VSAxisState>>;
+        axisevents: Array<Rx.Subject<VSAxisDirLevelChange>>;
         
         constructor( public gpindex: number ) {
             this.buttonstates = new Array<Rx.Subject<VSButtonState>>();
@@ -96,6 +115,68 @@ module GamepadsCollector {
                 } );
             }
 
+            this.axisstates = new Array<Rx.Subject<VSAxisState>>();
+            this.axisevents = new Array<Rx.Subject<VSAxisDirLevelChange>>();
+            for( let i = 0 ; i < VEAxisType.Size ; i++ ) {
+                let index = i;
+                this.axisstates.push( new Rx.Subject<VSAxisState>() );
+                this.axisevents.push( new Rx.Subject<VSAxisDirLevelChange>() );
+
+                this.axisstates[index].map( ( state: VSAxisState )=>{
+                    let dis = Math.sqrt(state.x * state.x + state.y * state.y);
+                    let level = VSAxisLevel.NotPush;
+                    if( dis < 0.15 ) {
+                        level = VSAxisLevel.NotPush;
+                    } else if( dis < 0.85 ) {
+                        level = VSAxisLevel.HalfPush;
+                    } else {
+                        level = VSAxisLevel.FullPush;
+                    }
+
+                    let dir = VSAxisDir.N;
+                    if( Math.abs(state.x) < 0.2 ) {
+                        if( state.y <= 0 ) {
+                            dir = VSAxisDir.N;
+                        } else {
+                            dir = VSAxisDir.S;
+                        }
+                    } else if( Math.abs(state.y) < 0.2 ) {
+                        if( state.x >= 0 ) {
+                            dir = VSAxisDir.E;
+                        } else {
+                            dir = VSAxisDir.W;
+                        }
+                    } else {
+                        if( state.x > 0 ) {
+                            if( state.y < 0 ) {
+                                dir = VSAxisDir.NE;
+                            } else {
+                                dir = VSAxisDir.SE;
+                            }
+                        } else {
+                            if( state.y < 0 ) {
+                                dir = VSAxisDir.NW;
+                            } else {
+                                dir = VSAxisDir.SW;
+                            }
+                        }
+                    }
+
+                    return {
+                        level: level,
+                        dir: dir,
+                    };
+                } ).distinctUntilChanged( (x: VSAxisDirLevelChange , y: VSAxisDirLevelChange)=>{
+                    if( x.level == VSAxisLevel.NotPush && y.level == VSAxisLevel.NotPush ){
+                        return true;
+                    } else {
+                        return (x.level == y.level) && (x.dir == y.dir);
+                    }
+                } ).subscribe( ( val: VSAxisDirLevelChange )=>{
+                    this.axisevents[index].next(val);
+                } );
+            }
+
             this.globalAnimationFrameSubscription = globalAnimationFrameSubscribable.subscribe(()=>{
                 let gamepad = navigator.getGamepads()[gpindex];
                 for( let i = 0 ; i < VEButtonType.Size ; i++ ) {
@@ -103,6 +184,12 @@ module GamepadsCollector {
                         pressed: gamepad.buttons[i].pressed,
                         percent: gamepad.buttons[i].value,
                     });
+                }
+                for( let i = 0 ; i < VEAxisType.Size ; i++ ) {
+                    this.axisstates[i].next({
+                        x: gamepad.axes[i*2+0],
+                        y: gamepad.axes[i*2+1],
+                    })
                 }
             });
         }
@@ -117,17 +204,18 @@ module GamepadsCollector {
         TrackEventButton(button: VEButtonType): Rx.Observable<VEButtonEventType> {
             return this.buttonevents[button];
         }
-        // TrackStateAxis(axis:VEAxisType): Rx.Observable<VSAxisState> {
-
-        // }
-        // TrackEventAxis(axis:VEAxisType): Rx.Observable<VEAxisEventType> {
-
-        // }
+        TrackStateAxis(axis:VEAxisType): Rx.Observable<VSAxisState> {
+            return this.axisstates[axis];
+        }
+        TrackEventAxis(axis:VEAxisType): Rx.Observable<VSAxisDirLevelChange> {
+            return this.axisevents[axis];
+        }
     }
     
     class VGamepadsCollector implements IVGamepadsCollector {
         gamepads: Array<VGamepad>;
         buttonevents: Array<Rx.Subject<[VEButtonEventType, IVGamepad]>>;
+        axisevents: Array<Rx.Subject<[VSAxisDirLevelChange, IVGamepad]>>;
     
         constructor(){
             this.gamepads = new Array<VGamepad>();
@@ -135,15 +223,24 @@ module GamepadsCollector {
             for( let i = 0 ; i < VEButtonType.Size ; i++ ) {
                 this.buttonevents.push(new Rx.Subject<[VEButtonEventType, IVGamepad]>());
             }
+            this.axisevents = new Array<Rx.Subject<[VSAxisDirLevelChange, IVGamepad]>>();
+            for( let i = 0 ; i < VEAxisType.Size ; i++ ) {
+                this.axisevents.push(new Rx.Subject<[VSAxisDirLevelChange, IVGamepad]>());
+            }
     
             const gc$ = Rx.Observable.fromEvent(window, "gamepadconnected");
             gc$.subscribe( ( evt: GamepadEvent )=>{
-                if( evt.gamepad.buttons.length == VEButtonType.Size && evt.gamepad.axes.length == VEAxisType.Size ) {
+                if( evt.gamepad.buttons.length == VEButtonType.Size && evt.gamepad.axes.length == VEAxisType.Size * 2 ) {
                     this.gamepads.push(new VGamepad(evt.gamepad.index));
                     let gpindex = this.gamepads.length - 1;
                     for( let i = 0 ; i < VEButtonType.Size ; i++ ) {
                         this.gamepads[gpindex].TrackEventButton(i).subscribe((et: VEButtonEventType)=>{
                             this.buttonevents[i].next([et,this.gamepads[gpindex]]);
+                        });
+                    }
+                    for( let i = 0 ; i < VEAxisType.Size ; i++ ) {
+                        this.gamepads[gpindex].TrackEventAxis(i).subscribe((et: VSAxisDirLevelChange)=>{
+                            this.axisevents[i].next([et,this.gamepads[gpindex]]);
                         });
                     }
                 }
@@ -171,9 +268,15 @@ module GamepadsCollector {
             return rt;
         }
 
-        // TrackEventAxis(axis:VEAxisType, evttype:VEAxisEventType): Rx.Observable<IVGamepad> {
-            
-        // }
+        TrackEventAxis(axis:VEAxisType, evttype:VSAxisDirLevelChange): Rx.Observable<IVGamepad> {
+            let rt = new Rx.Subject<IVGamepad>(); 
+            this.axisevents[axis].subscribe((val: [VSAxisDirLevelChange, IVGamepad])=>{
+                if(val[0].dir == evttype.dir && val[0].level == evttype.level) {
+                    rt.next(val[1]);
+                }
+            });
+            return rt;
+        }
     }
 
     export var gamepadCollector: IVGamepadsCollector = new VGamepadsCollector();
