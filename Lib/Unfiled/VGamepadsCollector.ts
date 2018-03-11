@@ -76,6 +76,8 @@ module GamepadsCollector {
     }
     
     export interface IVGamepadsCollector {
+        TrackGamepadConnected: () => Rx.Observable<IVGamepad>;
+        TrackGamepadDisconnected: () => Rx.Observable<IVGamepad>;
         TrackEventButton: (button:VEButtonType, evttype:VEButtonEventType) => Rx.Observable<IVGamepad>;
         TrackEventAxis: (axis:VEAxisType, evttype:VSAxisDirLevelChange) => Rx.Observable<IVGamepad>;
     }
@@ -196,6 +198,18 @@ module GamepadsCollector {
     
         destructor(){
             this.globalAnimationFrameSubscription.unsubscribe();
+            for( let i = 0 ; i < this.buttonstates.length ; i++ ) {
+                this.buttonstates[i].complete();
+            }
+            for( let i = 0 ; i < this.buttonevents.length ; i++ ) {
+                this.buttonevents[i].complete();
+            }
+            for( let i = 0 ; i < this.axisstates.length ; i++ ) {
+                this.axisstates[i].complete();
+            }
+            for( let i = 0 ; i < this.axisevents.length ; i++ ) {
+                this.axisevents[i].complete();
+            }
         }
 
         TrackStateButton(button: VEButtonType): Rx.Observable<VSButtonState> {
@@ -214,11 +228,15 @@ module GamepadsCollector {
     
     class VGamepadsCollector implements IVGamepadsCollector {
         gamepads: Array<VGamepad>;
+        gamepadConnected: Rx.Subject<IVGamepad>;
+        gamepadDisconnected: Rx.Subject<IVGamepad>;
         buttonevents: Array<Rx.Subject<[VEButtonEventType, IVGamepad]>>;
         axisevents: Array<Rx.Subject<[VSAxisDirLevelChange, IVGamepad]>>;
     
         constructor(){
             this.gamepads = new Array<VGamepad>();
+            this.gamepadConnected = new Rx.Subject<IVGamepad>();
+            this.gamepadDisconnected = new Rx.Subject<IVGamepad>();
             this.buttonevents = new Array<Rx.Subject<[VEButtonEventType, IVGamepad]>>();
             for( let i = 0 ; i < VEButtonType.Size ; i++ ) {
                 this.buttonevents.push(new Rx.Subject<[VEButtonEventType, IVGamepad]>());
@@ -243,6 +261,8 @@ module GamepadsCollector {
                             this.axisevents[i].next([et,this.gamepads[gpindex]]);
                         });
                     }
+
+                    this.gamepadConnected.next(this.gamepads[gpindex]);
                 }
             } );
     
@@ -250,12 +270,21 @@ module GamepadsCollector {
             gd$.subscribe( ( evt: GamepadEvent )=>{
                 for( let i = 0; i < this.gamepads.length ; i++ ){
                     if( this.gamepads[i].gpindex == evt.gamepad.index ){
+                        this.gamepadDisconnected.next(this.gamepads[i]);
                         this.gamepads[i].destructor();
                         this.gamepads.splice(i , 1);
                         break;
                     }
                 }
             } );
+        }
+
+        TrackGamepadConnected(): Rx.Observable<IVGamepad> {
+            return this.gamepadConnected;
+        }
+
+        TrackGamepadDisconnected(): Rx.Observable<IVGamepad> {
+            return this.gamepadDisconnected;
         }
 
         TrackEventButton(button:VEButtonType, evttype:VEButtonEventType): Rx.Observable<IVGamepad> {

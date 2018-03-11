@@ -22,20 +22,33 @@ module module_main{
             rtx.defaultRenderTarget.render();
         }); 
 
-        let sel = GamepadsCollector.gamepadCollector.TrackEventButton(GamepadsCollector.VEButtonType.A, GamepadsCollector.VEButtonEventType.Press).subscribe(( gamepad: GamepadsCollector.IVGamepad )=>{ 
-            sel.unsubscribe();
-            scene.setClearColor(0,1,0,1);
-            scene.dirty();
-            gamepad.TrackEventAxis(GamepadsCollector.VEAxisType.Right).subscribe( (val: GamepadsCollector.VSAxisDirLevelChange)=>{
-                console.log(GamepadsCollector.VSAxisDir[val.dir]);
-            } );
+        let func = ()=>{
+            let sel = GamepadsCollector.gamepadCollector.TrackEventButton(GamepadsCollector.VEButtonType.A, GamepadsCollector.VEButtonEventType.Press).subscribe(( gamepad: GamepadsCollector.IVGamepad )=>{ 
+                sel.unsubscribe();
+                scene.setClearColor(0,1,0,1);
+                scene.dirty();
+                gamepad.TrackEventAxis(GamepadsCollector.VEAxisType.Right).subscribe( (val: GamepadsCollector.VSAxisDirLevelChange)=>{
+                    console.log(GamepadsCollector.VSAxisDir[val.dir]);
+                } );
+    
+                gamepad.TrackEventButton(GamepadsCollector.VEButtonType.A)
+                .filter( ( evttype: GamepadsCollector.VEButtonEventType )=>{ return evttype == GamepadsCollector.VEButtonEventType.Press } )
+                .subscribe( ()=>{
+                    console.log("A");
+                } );
+    
+                GamepadsCollector.gamepadCollector.TrackGamepadDisconnected().subscribe( ( gp: GamepadsCollector.IVGamepad )=>{
+                    if(gp == gamepad){
+                        scene.setClearColor(1,0,0,1);
+                        scene.dirty();
+    
+                        func();
+                    }
+                } )
+            });
+        }
 
-            gamepad.TrackEventButton(GamepadsCollector.VEButtonType.A)
-            .filter( ( evttype: GamepadsCollector.VEButtonEventType )=>{ return evttype == GamepadsCollector.VEButtonEventType.Press } )
-            .subscribe( ()=>{
-                console.log("A");
-            } );
-        });
+        func();
         
         const sceneresize$ = Rx.Observable.fromEvent(window, "resize");
         sceneresize$.subscribe( () => { 
