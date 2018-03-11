@@ -3,6 +3,7 @@ import { renderbase } from "../Lib/Render/renderbase";
 import { globalAnimationFrameSubscribable } from "../Lib/Unfiled/VAnimationFrameSubscribable";
 import { VSleeper } from "../Lib/Unfiled/VSleeper";
 import { VFPS } from "../Lib/Unfiled/VFPS";
+import { GamepadsCollector } from "../Lib/Unfiled/VGamepadsCollector";
 
 module module_main{
     export function main(){
@@ -16,11 +17,13 @@ module module_main{
 
         let fps = new VFPS();
         let globalAnimationFrameSubscription = globalAnimationFrameSubscribable.subscribe(()=>{
-            VSleeper.sleep(30);
+            //VSleeper.sleep(30);
             fps.onRender();
             rtx.defaultRenderTarget.render();
-        });
+        }); 
 
+        GamepadsCollector.gamepadCollector.TrackEventButton(GamepadsCollector.VEButtonType.A, GamepadsCollector.VEButtonEventType.LongPress).subscribe(( gamepad: GamepadsCollector.IVGamepad )=>{ console.log("A"); });
+        
         const sceneresize$ = Rx.Observable.fromEvent(window, "resize");
         sceneresize$.subscribe( () => { 
             scene.setClearColor(0,1,0,1);

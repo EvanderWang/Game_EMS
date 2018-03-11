@@ -25,6 +25,7 @@ class VAnimationFrameSubscribable implements RxObservable.Subscribable<void> {
 
     constructor() {
         this.subscribers = new Array<VAnimationFrameObserver>();
+        Rx.Subject.create();
     }
 
     next () {
