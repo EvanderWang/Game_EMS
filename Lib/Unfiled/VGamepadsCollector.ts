@@ -36,13 +36,13 @@ module GamepadsCollector {
         LongPress,
     }
 
-    export enum VSAxisLevel {
+    export enum VEAxisLevel {
         NotPush,
         HalfPush,
         FullPush,
     }
 
-    export enum VSAxisDir {
+    export enum VEAxisDir {
         N,
         S,
         W,
@@ -64,8 +64,8 @@ module GamepadsCollector {
     }
 
     export interface VSAxisDirLevelChange {
-        level: VSAxisLevel;
-        dir: VSAxisDir;
+        level: VEAxisLevel;
+        dir: VEAxisDir;
     }
 
     export interface IVGamepad {
@@ -126,40 +126,40 @@ module GamepadsCollector {
 
                 this.axisstates[index].map( ( state: VSAxisState )=>{
                     let dis = Math.sqrt(state.x * state.x + state.y * state.y);
-                    let level = VSAxisLevel.NotPush;
+                    let level = VEAxisLevel.NotPush;
                     if( dis < 0.15 ) {
-                        level = VSAxisLevel.NotPush;
+                        level = VEAxisLevel.NotPush;
                     } else if( dis < 0.85 ) {
-                        level = VSAxisLevel.HalfPush;
+                        level = VEAxisLevel.HalfPush;
                     } else {
-                        level = VSAxisLevel.FullPush;
+                        level = VEAxisLevel.FullPush;
                     }
 
-                    let dir = VSAxisDir.N;
+                    let dir = VEAxisDir.N;
                     if( Math.abs(state.x) < 0.2 ) {
                         if( state.y <= 0 ) {
-                            dir = VSAxisDir.N;
+                            dir = VEAxisDir.N;
                         } else {
-                            dir = VSAxisDir.S;
+                            dir = VEAxisDir.S;
                         }
                     } else if( Math.abs(state.y) < 0.2 ) {
                         if( state.x >= 0 ) {
-                            dir = VSAxisDir.E;
+                            dir = VEAxisDir.E;
                         } else {
-                            dir = VSAxisDir.W;
+                            dir = VEAxisDir.W;
                         }
                     } else {
                         if( state.x > 0 ) {
                             if( state.y < 0 ) {
-                                dir = VSAxisDir.NE;
+                                dir = VEAxisDir.NE;
                             } else {
-                                dir = VSAxisDir.SE;
+                                dir = VEAxisDir.SE;
                             }
                         } else {
                             if( state.y < 0 ) {
-                                dir = VSAxisDir.NW;
+                                dir = VEAxisDir.NW;
                             } else {
-                                dir = VSAxisDir.SW;
+                                dir = VEAxisDir.SW;
                             }
                         }
                     }
@@ -169,7 +169,7 @@ module GamepadsCollector {
                         dir: dir,
                     };
                 } ).distinctUntilChanged( (x: VSAxisDirLevelChange , y: VSAxisDirLevelChange)=>{
-                    if( x.level == VSAxisLevel.NotPush && y.level == VSAxisLevel.NotPush ){
+                    if( x.level == VEAxisLevel.NotPush && y.level == VEAxisLevel.NotPush ){
                         return true;
                     } else {
                         return (x.level == y.level) && (x.dir == y.dir);

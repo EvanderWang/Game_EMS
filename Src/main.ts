@@ -28,7 +28,7 @@ module module_main{
                 scene.setClearColor(0,1,0,1);
                 scene.dirty();
                 gamepad.TrackEventAxis(GamepadsCollector.VEAxisType.Right).subscribe( (val: GamepadsCollector.VSAxisDirLevelChange)=>{
-                    console.log(GamepadsCollector.VSAxisDir[val.dir]);
+                    console.log(GamepadsCollector.VEAxisDir[val.dir]);
                 } );
     
                 gamepad.TrackEventButton(GamepadsCollector.VEButtonType.A)
