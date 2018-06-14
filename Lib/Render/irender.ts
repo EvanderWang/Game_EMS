@@ -1,6 +1,5 @@
 ﻿import { matrix } from "../Math/matrix";
 import { vector } from "../Math/vector";
-import { VGUID } from "../Std/guid";
 
 module irender {
     export interface IVGpuRes {
@@ -47,27 +46,31 @@ module irender {
 
     export enum VEPolygonOffsetParam {
         ENABLE,
+        DISABLE,
     }
 
     export interface IVProgramRenderer {
         setUniformMat4: (pos: WebGLUniformLocation, dat: matrix.VMat4) => void;
+        setUniformFloat: (pos: WebGLUniformLocation, dat: number) => void;
         setUniformVec2: (pos: WebGLUniformLocation, dat: vector.VFVector2) => void;
         setUniformVec3: (pos: WebGLUniformLocation, dat: vector.VFVector3) => void;
-        setUniformVec3I: (pos: WebGLUniformLocation, dat: vector.VNVector3UI) => void;
         setUniformVec4: (pos: WebGLUniformLocation, dat: vector.VFVector4) => void;
-        setUniformFloat: (pos: WebGLUniformLocation, dat: number) => void;
+        setUniformVec3I: (pos: WebGLUniformLocation, dat: vector.VNVector3UI) => void;
+        setUniformTexture: (pos: WebGLUniformLocation, tex: IVTexture2D) => void;
         // ...
-        setAttributeVF3: (pos: GLint, data: IVBuffer) => void;
-        setAttributeVF2: (pos: GLint, data: IVBuffer) => void;
-        // ...
-        clearAttribute: (pos: GLint) => void;
 
-        setTexture: (pos: WebGLUniformLocation, tex: IVTexture2D) => void;
+        setAttributeVF1: (pos: GLint, data: IVBuffer) => void;
+        setAttributeVF2: (pos: GLint, data: IVBuffer) => void;
+        setAttributeVF3: (pos: GLint, data: IVBuffer) => void;
+        
+        clearAttribute: (pos: GLint) => void;
+        // ...
 
         renderTriIndex: (buf: IVIndexBuffer, count?: number) => void;
         renderLinestripIndex: (buf: IVIndexBuffer, count?: number) => void;
 
         setDepthFunc: (df: VEDepthFuncParam) => void;
+        setDepthMask: (mask: boolean) => void;
         setBlendFunc: (sf: VEBlendFuncParam, df: VEBlendFuncParam) => void;
         setCullFace: (cf: VECullFaceParam) => void;
         setPolygonOffset: (pf: VEPolygonOffsetParam) => void;
@@ -77,89 +80,60 @@ module irender {
         setProgram: (p: IVProgram, prRecv: (pr: IVProgramRenderer) => void) => void;
     }
 
-    export interface IVSceneRenderer {
+    export interface IVBoardRenderer {
         render: (tool: IVRenderTool) => void;
     }
 
-    export interface IVScene { // Lower Left Base
+    export interface IVBoard { // Lower Left Base
         setViewport: (x: number, y: number, width: number, height: number) => void;
         setViewportPercent: (xper: number, yper: number, wper: number, hper: number) => void;
         setClearColor: (r: number, g: number, b: number, a: number) => void;
         setClearDepth: (depth: number) => void;
+        setLayer: (layer: number) => void;
 
-        setRenderer: (renderer: IVSceneRenderer | null) => void;
+        setRenderer: (renderer: IVBoardRenderer | null) => void;
         dirty: () => void;
     }
 
-    export interface IVMouseEvt {
+    export class VSGlPos { // Lower Left Base
         x: number;
         y: number;
-    }
-
-    export interface IVWheelEvt {
-        deltY: number;
-    }
-
-    export interface IVMouseKeyboardListener { // 此处需要修改，考虑自定义消息类型? 或者派发过去由Listener再行转换. 不过基本原则上需要进行位置估计，例如多手指不全在此区域比较麻烦，需思考
-        onLeftUp: (evt: IVMouseEvt) => void;
-        onLeftDown: (evt: IVMouseEvt) => void;
-        onRightUp: (evt: IVMouseEvt) => void;
-        onRightDown: (evt: IVMouseEvt) => void;
-        onMove: (evt: IVMouseEvt) => void;
-        onLeftClick: (evt: IVMouseEvt) => void;
-        onRightClick: (evt: IVMouseEvt) => void;
-        onDoubleClick: (evt: IVMouseEvt) => void;
-        onWheel: (evt: IVWheelEvt) => void;
-        onEnter: () => void;
-        onLeave: () => void;
-        onHover: (evt: IVMouseEvt) => void;
-    }
-
-    export interface IVTouchListener {
-        // need add
-    }
-
-    export interface IVGamepadsListener {
-        // need add
-    }
-
-    export interface IVMessageScene extends IVScene {
-        setListener: (listener: IVMouseKeyboardListener | IVTouchListener | IVGamepadsListener | null) => void;
     }
 
     export interface IVRenderTarget {
         width: number;
         height: number;
+
         render: () => void;
-    }
+        clean: (rgba ?: [number, number, number, number]) => void;
 
-    export interface IVDefaultRenderTarget extends IVRenderTarget {
-        listenResize: ( onresizeRender: ( (width:number, height:number) => void ) | null) => void;
-        createScene: () => IVMessageScene;
-    }
+        createBoard: () => IVBoard;
+        deleteBoard: (board: IVBoard) => void;
 
-    export interface IVNewRenderTarget extends IVRenderTarget, IVGpuRes {
-        useColorTexture: (count: number) => IVTexture2D[];
-        useDepthTexture: () => IVTexture2D;
-        createScene: () => IVScene;
+        calPos: (pos: VSGlPos) => [IVBoard, VSGlPos] | null;
 
         getPixels: () => Float32Array;
-        getPixelColorUI: (pt: vector.VNVector2UI) => vector.VNVector3UI | null;
+        getPixelColorUI: (pt: VSGlPos) => vector.VNVector3UI | null;
+    }
+
+    export interface IVOffscreenRenderTarget extends IVRenderTarget, IVGpuRes {
+        useColorTexture: (count: number) => IVTexture2D[];
+        useDepthTexture: () => IVTexture2D;
+
         resize: (width: number, height: number) => void;
     }
 
-    export interface IVProgram extends IVGpuRes{
+    export interface IVProgram extends IVGpuRes {
         getUnifromPos: (name: string) => WebGLUniformLocation | null;
         getAttributePos: (name: string) => GLint | null;
     }
 
     export interface IVBuffer extends IVGpuRes {
-        //byteLength: number;
         changeBuf: (bufData: ArrayBuffer) => void;
     }
 
     export interface IVIndexBuffer extends IVGpuRes {
-        //byteLength: number;
+        changeBuf: (bufData: Uint32Array) => void;
     }
 
     export interface IVTexture2D extends IVGpuRes {
@@ -167,14 +141,9 @@ module irender {
         height: number;
     }
 
-    //export interface IVRenderBuffer extends IVBuffer {
-    //    width: number;
-    //    height: number;
-    //}
-
-    export interface IVRenderContext {
-        defaultRenderTarget: IVDefaultRenderTarget;
-        createRenderTarget: (width: number, height: number) => IVNewRenderTarget;
+    export interface IVRenderContext extends IVGpuRes {
+        defaultRenderTarget: IVRenderTarget;
+        createRenderTarget: (width: number, height: number) => IVOffscreenRenderTarget | null;
         createProgram: (vertexShaderData: string, fragmentShaderData: string) => IVProgram;
         createBuffer: (bufData: ArrayBuffer) => IVBuffer;
         createIndex: (bufData: Uint32Array) => IVIndexBuffer;
@@ -183,8 +152,6 @@ module irender {
 
         resize: (width: number, height: number) => void;
         sync: () => void;
-
-        delete: () => void;
     }
 }
 

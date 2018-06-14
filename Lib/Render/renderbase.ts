@@ -1,43 +1,10 @@
 ﻿import { irender } from "./irender";
-import { VGUID } from "../Std/guid";
-import { matrix } from "../Math/matrix";
-import { vector } from "../Math/vector";
+import { map } from "../../Base/std/map";
+import { VGUID } from "../../Base/std/guid";
+import { matrix } from "../../Base/math/matrix";
+import { vector } from "../../Base/math/vector";
 
 module renderbase {
-    class VPos {
-        v: boolean;
-        x: number;
-        y: number;
-    }
-
-    function isPowerOf2(value: number) {
-        return (value & (value - 1)) == 0;
-    }
-
-    class VExtensionChecker {
-        enabledExtensions: Array<string>;
-
-        constructor(private gl: WebGLRenderingContext) {
-            let exts = gl.getSupportedExtensions();
-            if (exts != null) {
-                this.enabledExtensions = exts;
-                //for (let i in this.enabledExtensions) {
-                //    gl.getExtension(this.enabledExtensions[i]);
-                //}
-            }
-        }
-
-        alertCheck(ext: string): any {
-            for (let i in this.enabledExtensions) {
-                if (this.enabledExtensions[i] == ext) {
-                    return this.gl.getExtension(ext);
-                }
-            }
-            console.error("do not support need extension : " + ext + " !");
-        }
-    }
-    var extChecker: VExtensionChecker;
-
     class VImpMngr<IT, T extends IT> {
         list: Array<T>;
 
@@ -69,6 +36,28 @@ module renderbase {
         }
     }
 
+    class VExtensionChecker {
+        enabledExtensions: Array<string>;
+
+        constructor(private gl: WebGLRenderingContext) {
+            let exts = gl.getSupportedExtensions();
+            if (exts != null) {
+                this.enabledExtensions = exts;
+            }
+        }
+
+        tryuseExtension(ext: string): boolean | any {
+            for (let i in this.enabledExtensions) {
+                if (this.enabledExtensions[i] == ext) {
+                    return this.gl.getExtension(ext);
+                }
+            }
+            console.error("do not support need extension : " + ext + " !");
+            return false;
+        }
+    }
+    var extChecker: VExtensionChecker;
+    
     class VBuffer implements irender.IVBuffer {
         byteLength: number;
         buffer: WebGLBuffer;
@@ -114,6 +103,14 @@ module renderbase {
             this.mngr.remove(this);
             this.gl.deleteBuffer(this.buffer);
         }
+
+        changeBuf(bufData: Uint32Array) {
+            this.byteLength = bufData.byteLength;
+            this.count = bufData.length;
+            this.gl.bindBuffer(this.gl.ELEMENT_ARRAY_BUFFER, this.buffer);
+            this.gl.bufferData(this.gl.ELEMENT_ARRAY_BUFFER, bufData, this.gl.DYNAMIC_DRAW);
+            this.gl.bindBuffer(this.gl.ELEMENT_ARRAY_BUFFER, null);
+        }
     }
 
     class VTexture2D implements irender.IVTexture2D {
@@ -122,8 +119,6 @@ module renderbase {
         texture: WebGLTexture;
 
         constructor(private gl: WebGLRenderingContext, w: number, h: number, texData: Float32Array, private mngr: VImpMngr<irender.IVTexture2D, VTexture2D>) {
-            extChecker.alertCheck('OES_texture_float');
-            extChecker.alertCheck('OES_texture_float_linear');
             this.width = w;
             this.height = h;
             this.texture = <WebGLTexture>gl.createTexture();
@@ -149,8 +144,6 @@ module renderbase {
         texture: WebGLTexture;
 
         constructor(private gl: WebGLRenderingContext, image: ImageBitmap | ImageData | HTMLVideoElement | HTMLImageElement | HTMLCanvasElement, private mngr: VImpMngr<irender.IVTexture2D, VTextureImage2D>) {
-            extChecker.alertCheck("OES_texture_float");
-            extChecker.alertCheck('OES_texture_float_linear');
             this.width = image.width;
             this.height = image.height;
             this.texture = <WebGLTexture>gl.createTexture();
@@ -172,7 +165,7 @@ module renderbase {
 
     class VProgramRenderer implements irender.IVProgramRenderer {
         curusedtexpos = 0;
-        texturePosToActivePos: Map<WebGLUniformLocation, number>;
+        texturePosToActivePos: map.Map<WebGLUniformLocation, number>;
 
         constructor(private gl: WebGLRenderingContext
             , private program: WebGLProgram
@@ -183,13 +176,14 @@ module renderbase {
             , private fboColorTexMngr: VImpMngr<irender.IVTexture2D, VColorAttachment>
             , private fboDepthTexMngr: VImpMngr<irender.IVTexture2D, VDepthAttachment>
         ) {
-            this.texturePosToActivePos = new Map<WebGLUniformLocation, number>();
+            this.texturePosToActivePos = new map.Map<WebGLUniformLocation, number>();
             this.initState();
         }
 
         private initState() {
             this.gl.enable(this.gl.DEPTH_TEST);
             this.gl.depthFunc(this.gl.LEQUAL);
+            this.gl.depthMask(true);
             this.gl.enable(this.gl.CULL_FACE);
             this.gl.cullFace(this.gl.BACK);
             this.gl.enable(this.gl.BLEND);
@@ -198,7 +192,6 @@ module renderbase {
         }
 
         private renderIndex(glRenderType: number, buf: irender.IVIndexBuffer, count?: number) {
-            extChecker.alertCheck("OES_element_index_uint");
             let buffer = this.idxMngr.check(buf);
             if (buffer != null) {
                 this.gl.bindBuffer(this.gl.ELEMENT_ARRAY_BUFFER, buffer.buffer);
@@ -221,8 +214,14 @@ module renderbase {
             this.renderIndex(this.gl.LINE_STRIP, buf, count);
         }
 
+
+
         setUniformMat4(pos: WebGLUniformLocation, dat: matrix.VMat4) {
             this.gl.uniformMatrix4fv(pos, false, dat.transpose().toFloat32Array());
+        }
+
+        setUniformFloat(pos: WebGLUniformLocation, dat: number) {
+            this.gl.uniform1f(pos, dat);
         }
 
         setUniformVec2(pos: WebGLUniformLocation, dat: vector.VFVector2) {
@@ -233,47 +232,15 @@ module renderbase {
             this.gl.uniform3f(pos, dat.x, dat.y, dat.z);
         }
 
-        setUniformVec3I(pos: WebGLUniformLocation, dat: vector.VNVector3UI) {
-            this.gl.uniform3f(pos, dat.x/255, dat.y/255, dat.z/255);
-        }
-
         setUniformVec4(pos: WebGLUniformLocation, dat: vector.VFVector4) {
             this.gl.uniform4f(pos, dat.x, dat.y, dat.z, dat.w);
         }
 
-        setUniformFloat(pos: WebGLUniformLocation, dat: number) {
-            this.gl.uniform1f(pos, dat);
+        setUniformVec3I(pos: WebGLUniformLocation, dat: vector.VNVector3UI) {
+            this.gl.uniform3i(pos, dat.x, dat.y, dat.z);
         }
 
-        setAttributeVF3(pos: GLint, data: irender.IVBuffer) {
-            let buf = this.bufMngr.check(data);
-            if (buf != null) {
-                this.gl.bindBuffer(this.gl.ARRAY_BUFFER, buf.buffer);
-                this.gl.enableVertexAttribArray(pos);
-                this.gl.vertexAttribPointer(pos, 3, this.gl.FLOAT, false, 4 * 3, 0);
-                this.gl.bindBuffer(this.gl.ARRAY_BUFFER, null);
-            } else {
-                console.error("use createBuffer() function from VRenderContext please.");
-            }
-        }
-
-        setAttributeVF2(pos: GLint, data: irender.IVBuffer) {
-            let buf = this.bufMngr.check(data);
-            if (buf != null) {
-                this.gl.bindBuffer(this.gl.ARRAY_BUFFER, buf.buffer);
-                this.gl.enableVertexAttribArray(pos);
-                this.gl.vertexAttribPointer(pos, 2, this.gl.FLOAT, false, 4 * 2, 0);
-                this.gl.bindBuffer(this.gl.ARRAY_BUFFER, null);
-            } else {
-                console.error("use createBuffer() function from VRenderContext please.");
-            }
-        }
-
-        clearAttribute(pos: GLint) {
-            this.gl.disableVertexAttribArray(pos);
-        }
-
-        setTexture(pos: WebGLUniformLocation, tex: irender.IVTexture2D) {
+        setUniformTexture(pos: WebGLUniformLocation, tex: irender.IVTexture2D) {
             let texture: WebGLTexture | null = null;
             let texture2D = this.texMngr.check(tex);
             if (texture2D != null) {
@@ -298,7 +265,7 @@ module renderbase {
             if (texture != null) {
                 let activePos: number = -1;
                 if (this.texturePosToActivePos.has(pos)) {
-                    activePos = this.texturePosToActivePos.get(pos);
+                    activePos = <number>this.texturePosToActivePos.get(pos);
                 } else if (this.curusedtexpos < this.gl.getParameter(this.gl.MAX_COMBINED_TEXTURE_IMAGE_UNITS)) {
                     activePos = this.curusedtexpos;
                     this.texturePosToActivePos.set(pos, this.curusedtexpos);
@@ -312,6 +279,59 @@ module renderbase {
             } else {
                 console.error("use createTexture() function from VRenderContext please.");
             }
+        }
+
+
+
+        setAttributeVF1(pos: GLint, data: irender.IVBuffer) {
+            let buf = this.bufMngr.check(data);
+            if (buf != null) {
+                this.gl.bindBuffer(this.gl.ARRAY_BUFFER, buf.buffer);
+                this.gl.enableVertexAttribArray(pos);
+                this.gl.vertexAttribPointer(pos, 1, this.gl.FLOAT, false, 4 * 1, 0);
+                this.gl.bindBuffer(this.gl.ARRAY_BUFFER, null);
+            } else {
+                console.error("use createBuffer() function from VRenderContext please.");
+            }
+        }
+
+        setAttributeVF2(pos: GLint, data: irender.IVBuffer) {
+            let buf = this.bufMngr.check(data);
+            if (buf != null) {
+                this.gl.bindBuffer(this.gl.ARRAY_BUFFER, buf.buffer);
+                this.gl.enableVertexAttribArray(pos);
+                this.gl.vertexAttribPointer(pos, 2, this.gl.FLOAT, false, 4 * 2, 0);
+                this.gl.bindBuffer(this.gl.ARRAY_BUFFER, null);
+            } else {
+                console.error("use createBuffer() function from VRenderContext please.");
+            }
+        }
+
+        setAttributeVF3(pos: GLint, data: irender.IVBuffer) {
+            let buf = this.bufMngr.check(data);
+            if (buf != null) {
+                this.gl.bindBuffer(this.gl.ARRAY_BUFFER, buf.buffer);
+                this.gl.enableVertexAttribArray(pos);
+                this.gl.vertexAttribPointer(pos, 3, this.gl.FLOAT, false, 4 * 3, 0);
+                this.gl.bindBuffer(this.gl.ARRAY_BUFFER, null);
+            } else {
+                console.error("use createBuffer() function from VRenderContext please.");
+            }
+        }
+
+        clearAttribute(pos: GLint) {
+            this.gl.disableVertexAttribArray(pos);
+        }
+
+
+
+        setDepthFunc(df: irender.VEDepthFuncParam) {
+            let param = this.switchDepthFuncParam(df);
+            if (param == -1) {
+                this.gl.disable(this.gl.DEPTH_TEST);
+            }
+            else
+                this.gl.depthFunc(param);
         }
 
         private switchDepthFuncParam(df: irender.VEDepthFuncParam): number {
@@ -337,13 +357,18 @@ module renderbase {
             }
         }
 
-        setDepthFunc(df: irender.VEDepthFuncParam) {
-            let param = this.switchDepthFuncParam(df);
-            if (param == -1) {
-                this.gl.disable(this.gl.DEPTH_TEST);
+        setDepthMask(mask: boolean) {
+            this.gl.depthMask(mask);
+        }
+
+        setBlendFunc(sf: irender.VEBlendFuncParam, df: irender.VEBlendFuncParam) {
+            let sparam = this.switchBlendFuncParam(sf);
+            let dparam = this.switchBlendFuncParam(df);
+            if (sparam == -1 || dparam == -1) {
+                this.gl.disable(this.gl.BLEND);
             }
             else
-                this.gl.depthFunc(param);
+                this.gl.blendFunc(sparam, dparam);
         }
 
         private switchBlendFuncParam(sf: irender.VEBlendFuncParam): number {
@@ -383,16 +408,6 @@ module renderbase {
             }
         }
 
-        setBlendFunc(sf: irender.VEBlendFuncParam, df: irender.VEBlendFuncParam) {
-            let sparam = this.switchBlendFuncParam(sf);
-            let dparam = this.switchBlendFuncParam(df);
-            if (sparam == -1 || dparam == -1) {
-                this.gl.disable(this.gl.BLEND);
-            }
-            else
-                this.gl.blendFunc(sparam, dparam);
-        }
-
         setCullFace(cf: irender.VECullFaceParam) {
             switch (cf) {
                 case irender.VECullFaceParam.BACK:
@@ -414,6 +429,8 @@ module renderbase {
             if (pf == irender.VEPolygonOffsetParam.ENABLE) {
                 this.gl.enable(this.gl.POLYGON_OFFSET_FILL);
                 this.gl.polygonOffset(-2, -2);
+            } else if (pf == irender.VEPolygonOffsetParam.DISABLE) {
+                this.gl.disable(this.gl.POLYGON_OFFSET_FILL);
             }
         }
     }
@@ -473,8 +490,6 @@ module renderbase {
     }
 
     class VRenderTool implements irender.IVRenderTool {
-        curProgram: VProgram | null;
-
         constructor(private gl: WebGLRenderingContext
             , private programMngr: VImpMngr<irender.IVProgram, VProgram>
             , private bufferMngr: VImpMngr<irender.IVBuffer, VBuffer>
@@ -483,23 +498,21 @@ module renderbase {
             , private texImgMngr: VImpMngr<irender.IVTexture2D, VTextureImage2D>
             , private fboColorTexMngr: VImpMngr<irender.IVTexture2D, VColorAttachment>
             , private fboDepthTexMngr: VImpMngr<irender.IVTexture2D, VDepthAttachment>
-        ) {
-            this.curProgram = null;
-        }
+        ) {}
 
         setProgram(p: irender.IVProgram, prRecv: (pr: irender.IVProgramRenderer) => void) {
-            this.curProgram = this.programMngr.check(p);
-            if (this.curProgram == null) {
+            let curProgram = this.programMngr.check(p);
+            if (curProgram == null) {
                 console.error("use createProgram() function from VRenderContext please.")
             } else {
-                this.gl.useProgram(this.curProgram.program);
-                prRecv(new VProgramRenderer(this.gl, this.curProgram.program, this.bufferMngr, this.idxMngr, this.texMngr, this.texImgMngr, this.fboColorTexMngr, this.fboDepthTexMngr));
+                this.gl.useProgram(curProgram.program);
+                prRecv(new VProgramRenderer(this.gl, curProgram.program, this.bufferMngr, this.idxMngr, this.texMngr, this.texImgMngr, this.fboColorTexMngr, this.fboDepthTexMngr));
             }
         }
     }
 
-    class VScene implements irender.IVMessageScene {
-        renderer: irender.IVSceneRenderer | null;
+    class VBoard implements irender.IVBoard {
+        renderer: irender.IVBoardRenderer | null;
         x: number;
         y: number;
         w: number;
@@ -509,68 +522,64 @@ module renderbase {
         G: number;
         B: number;
         A: number;
-        depth: number
-        tool: VRenderTool;
+        depth: number;
+        layer: number;
         mDirty: boolean;
-        listener: irender.IVMouseKeyboardListener | irender.IVTouchListener | irender.IVGamepadsListener | null;
 
-        constructor(private gl: WebGLRenderingContext, private frameWidth: number, private frameHeight: number
-            , programMngr: VImpMngr<irender.IVProgram, VProgram>
-            , bufferMngr: VImpMngr<irender.IVBuffer, VBuffer>
-            , idxMngr: VImpMngr<irender.IVIndexBuffer, VIndexBuffer>
-            , textureMngr: VImpMngr<irender.IVTexture2D, VTexture2D>
-            , texImgMngr: VImpMngr<irender.IVTexture2D, VTextureImage2D>
-            , fboColorTexMngr: VImpMngr<irender.IVTexture2D, VColorAttachment>
-            , fboDepthTexMngr: VImpMngr<irender.IVTexture2D, VDepthAttachment>
+        constructor(private gl: WebGLRenderingContext
+            , private ParentWidth: number
+            , private ParentHeight: number
+            , private renderTool: VRenderTool
         ) {
             this.renderer = null;
-            this.listener = null;
             this.usePercent = false;
             this.mDirty = false;
             this.x = 0;
             this.y = 0;
-            this.w = frameWidth;
-            this.h = frameHeight;
+            this.w = ParentWidth;
+            this.h = ParentHeight;
             this.R = 0.0;
             this.G = 0.0;
             this.B = 0.0;
             this.A = 1.0;
             this.depth = 1.0;
-            this.tool = new VRenderTool(gl, programMngr, bufferMngr, idxMngr, textureMngr, texImgMngr, fboColorTexMngr, fboDepthTexMngr);
         }
 
-        setSize(width: number, height: number) {
-            this.frameWidth = width;
-            this.frameHeight = height;
+        private calXYWH(): [number,number,number,number] {
+            let rx = this.x;
+            let ry = this.y;
+            let rw = this.w;
+            let rh = this.h;
+            if (this.usePercent) {
+                rx = this.x * this.ParentWidth;
+                ry = this.y * this.ParentHeight;
+                rw = this.w * this.ParentWidth;
+                rh = this.h * this.ParentHeight;
+            }
+            return [rx, ry, rw, rh];
+        }
+
+        setParentSize(width: number, height: number) {
+            this.ParentWidth = width;
+            this.ParentHeight = height;
         }
 
         render() {
-            if (this.mDirty) {
-                let rx = this.x;
-                let ry = this.y;
-                let rw = this.w;
-                let rh = this.h;
-                if (this.usePercent) {
-                    rx = this.x * this.frameWidth;
-                    ry = this.y * this.frameHeight;
-                    rw = this.w * this.frameWidth;
-                    rh = this.h * this.frameHeight;
-                }
-                this.gl.scissor(rx, ry, rw, rh);
-                this.gl.viewport(rx, ry, rw, rh);
+            if (this.mDirty && this.renderer) {
+                this.mDirty = false;
+                let rywh = this.calXYWH();
+                
+                this.gl.scissor(rywh[0], rywh[1], rywh[2], rywh[3]);
+                this.gl.viewport(rywh[0], rywh[1], rywh[2], rywh[3]);
                 this.gl.clearColor(this.R, this.G, this.B, this.A);
                 this.gl.clearDepth(this.depth);
                 this.gl.clear(this.gl.COLOR_BUFFER_BIT | this.gl.DEPTH_BUFFER_BIT);
-                if (this.renderer != null) {
-                    this.renderer.render(this.tool);
-                }
 
-                this.mDirty = false;
+                this.renderer.render(this.renderTool);
             }
-            
         }
 
-        setRenderer(renderer: irender.IVSceneRenderer | null) {
+        setRenderer(renderer: irender.IVBoardRenderer | null) {
             this.renderer = renderer;
         }
 
@@ -601,91 +610,25 @@ module renderbase {
             this.depth = depth;
         }
 
+        setLayer(layer: number) {
+            this.layer = layer;
+        }
+
         dirty() {
             this.mDirty = true;
         }
 
-        private dispatchCheck(evt: VPos): VPos{
-            let rx = this.x;
-            let ry = this.y;
-            let rw = this.w;
-            let rh = this.h;
-            if (this.usePercent) {
-                rx = this.x * this.frameWidth;
-                ry = this.y * this.frameHeight;
-                rw = this.w * this.frameWidth;
-                rh = this.h * this.frameHeight;
-            }
+        posAt(parentpos: irender.VSGlPos): irender.VSGlPos | null {
+            let rywh = this.calXYWH();
 
-            if (evt.x >= rx && evt.x < rx + rw && evt.y >= ry && evt.y < ry + rh) {
-                return { v: true, x: evt.x - rx, y: evt.y - ry };
+            if (parentpos.x >= rywh[0] && parentpos.x < (rywh[0] + rywh[2]) && parentpos.y >= rywh[1] && parentpos.y < (rywh[1] + rywh[3])) {
+                let rtValue = new irender.VSGlPos();
+                rtValue.x = parentpos.x - rywh[0];
+                rtValue.y = parentpos.y - rywh[1];
+                return rtValue;
             } else {
-                return { v: false, x: 0, y: 0 };
+                return null;
             }
-        }
-
-        dispatchLeave() {
-            if (this.listener != null) {
-                (<irender.IVMouseKeyboardListener>this.listener).onLeave();
-            }
-        }
-
-        dispatchMove(evt: irender.IVMouseEvt) {
-            if (this.listener != null) {
-                let dispatched = this.dispatchCheck({ v: true, x: evt.x, y: evt.y });
-                if (dispatched.v) {
-                    (<irender.IVMouseKeyboardListener>this.listener).onMove({ x: dispatched.x, y: dispatched.y });
-                } 
-            }
-        }
-
-        dispatchLeftDown(evt: irender.IVMouseEvt) {
-            if (this.listener != null) {
-                let dispatched = this.dispatchCheck({ v: true, x: evt.x, y: evt.y });
-                if (dispatched.v) {
-                    (<irender.IVMouseKeyboardListener>this.listener).onLeftDown({ x: dispatched.x, y: dispatched.y });
-                }
-            }
-        }
-
-        dispatchLeftUp(evt: irender.IVMouseEvt) {
-            if (this.listener != null) {
-                let dispatched = this.dispatchCheck({ v: true, x: evt.x, y: evt.y });
-                if (dispatched.v) {
-                    (<irender.IVMouseKeyboardListener>this.listener).onLeftUp({ x: dispatched.x, y: dispatched.y });
-                }
-            }
-        }
-
-        dispatchRightDown(evt: irender.IVMouseEvt) {
-            if (this.listener != null) {
-                let dispatched = this.dispatchCheck({ v: true, x: evt.x, y: evt.y });
-                if (dispatched.v) {
-                    (<irender.IVMouseKeyboardListener>this.listener).onRightDown({ x: dispatched.x, y: dispatched.y });
-                }
-            }
-        }
-
-        dispatchRightUp(evt: irender.IVMouseEvt) {
-            if (this.listener != null) {
-                let dispatched = this.dispatchCheck({ v: true, x: evt.x, y: evt.y });
-                if (dispatched.v) {
-                    (<irender.IVMouseKeyboardListener>this.listener).onRightUp({ x: dispatched.x, y: dispatched.y });
-                }
-            }
-        }
-
-        dispatchWheel(evt: irender.IVWheelEvt, pos: VPos) {
-            if (this.listener != null) {
-                let dispatched = this.dispatchCheck(pos);
-                if (dispatched.v) {
-                    (<irender.IVMouseKeyboardListener>this.listener).onWheel(evt);
-                }
-            }
-        }
-
-        setListener(listener: irender.IVMouseKeyboardListener | irender.IVTouchListener | irender.IVGamepadsListener | null) {
-            this.listener = listener;
         }
     }
 
@@ -695,20 +638,15 @@ module renderbase {
         texture: WebGLTexture;
 
         constructor(private gl: WebGLRenderingContext, w: number, h: number,private mngr: VImpMngr<irender.IVTexture2D, VColorAttachment>) {
-            extChecker.alertCheck('OES_texture_float');
-            extChecker.alertCheck('OES_texture_float_linear');
             this.width = w;
             this.height = h;
             this.texture = <WebGLTexture>gl.createTexture();
             gl.bindTexture(gl.TEXTURE_2D, this.texture);
             gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w, h, 0, gl.RGBA, this.gl.FLOAT, null);
-            if (isPowerOf2(this.width) && isPowerOf2(this.height)) {
-                gl.generateMipmap(gl.TEXTURE_2D);
-            } else {
-                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-            }
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+            gl.texParameterf(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
             gl.bindTexture(gl.TEXTURE_2D, null);
             mngr.record(this);
         }
@@ -734,19 +672,15 @@ module renderbase {
         texture: WebGLTexture;
 
         constructor(private gl: WebGLRenderingContext, w: number, h: number,private mngr: VImpMngr<irender.IVTexture2D, VDepthAttachment>) {
-            extChecker.alertCheck('WEBGL_depth_texture');
             this.width = w;
             this.height = h;
             this.texture = <WebGLTexture>gl.createTexture();
             gl.bindTexture(gl.TEXTURE_2D, this.texture);
             gl.texImage2D(gl.TEXTURE_2D, 0, gl.DEPTH_COMPONENT, w, h, 0, gl.DEPTH_COMPONENT, gl.UNSIGNED_SHORT, null);
-            if (isPowerOf2(this.width) && isPowerOf2(this.height)) {
-                gl.generateMipmap(gl.TEXTURE_2D);
-            } else {
-                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-            }
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+            gl.texParameterf(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
             gl.bindTexture(gl.TEXTURE_2D, null);
             mngr.record(this);
         }
@@ -766,251 +700,160 @@ module renderbase {
         }
     }
 
-    class VDefaultRenderTarget implements irender.IVDefaultRenderTarget {
-        width: number;
-        height: number;
-        sceneList: Array<VScene>;
-        onresize: ((width: number, height: number) => void ) | null; 
-
-        oldtouchList: TouchList | null = null;
-        moving: boolean = false;
+    class VDefaultRenderTarget implements irender.IVRenderTarget {
+        boardList: Array<VBoard>;
 
         constructor(private gl: WebGLRenderingContext
-            , private programMngr: VImpMngr<irender.IVProgram, VProgram>
-            , private bufferMngr: VImpMngr<irender.IVBuffer, VBuffer>
-            , private idxMngr: VImpMngr<irender.IVIndexBuffer, VIndexBuffer>
-            , private textureMngr: VImpMngr<irender.IVTexture2D, VTexture2D>
-            , private texImgMngr: VImpMngr<irender.IVTexture2D, VTextureImage2D>
-            , private fboColorTexMngr: VImpMngr<irender.IVTexture2D, VColorAttachment>
-            , private fboDepthTexMngr: VImpMngr<irender.IVTexture2D, VDepthAttachment>
-            , private canvas: HTMLCanvasElement
+            , public width: number
+            , public height: number
+            , private renderTool: VRenderTool
         ) {
-            this.width = gl.drawingBufferWidth;
-            this.height = gl.drawingBufferHeight;
-            this.sceneList = new Array<VScene>();
-            this.onresize = null;
-
-            canvas.addEventListener("mousedown", (ev: MouseEvent) => {
-                let pos = this.calMouseEvent(ev);
-                if (ev.button == 0) {
-                    this.dispatchMouseEvt(VScene.prototype.dispatchLeftDown, pos);
-                } else if (ev.button == 2) {
-                    this.dispatchMouseEvt(VScene.prototype.dispatchRightDown, pos);
-                }
-                this.stopPropagation(ev);
-            });
-            canvas.addEventListener("mouseup", (ev: MouseEvent) => {
-                let pos = this.calMouseEvent(ev);
-                if (ev.button == 0) {
-                    this.dispatchMouseEvt(VScene.prototype.dispatchLeftUp, pos);
-                } else if (ev.button == 2) {
-                    this.dispatchMouseEvt(VScene.prototype.dispatchRightUp, pos);
-                }
-                this.stopPropagation(ev);
-            });
-            canvas.addEventListener("mousemove", (ev: MouseEvent) => {
-                let pos = this.calMouseEvent(ev);
-                this.dispatchMouseEvt(VScene.prototype.dispatchMove, pos);
-                this.stopPropagation(ev);
-            });
-            canvas.addEventListener("mousewheel", (ev: WheelEvent) => {
-                let pos = this.calMouseEvent(ev);
-                this.dispatchWheelEvt(VScene.prototype.dispatchWheel, { deltY: ev.deltaY }, pos);
-                this.stopPropagation(ev);
-            });
-            canvas.addEventListener("mouseleave", (ev: MouseEvent) => {
-                this.dispatchNoneEvt(VScene.prototype.dispatchLeave);
-                this.stopPropagation(ev);
-            });
-
-            canvas.addEventListener("touchstart", (ev: TouchEvent) => {
-                ev.preventDefault();
-                this.onMessageTouch(ev);
-                this.stopPropagation(ev);
-            });
-
-            canvas.addEventListener("touchmove", (ev: TouchEvent) => {
-                ev.preventDefault();
-                this.onMessageTouch(ev);
-                this.stopPropagation(ev);
-            });
-            canvas.addEventListener("touchend", (ev: TouchEvent) => {
-                ev.preventDefault();
-                this.onMessageTouch(ev, true);
-                this.stopPropagation(ev);
-            });
-            canvas.addEventListener("touchcancel", (ev: TouchEvent) => {
-                ev.preventDefault();
-                this.onMessageTouch(ev, true);
-                this.stopPropagation(ev);
-            });
+            this.boardList = new Array<VBoard>();
         }
 
-        private stopPropagation(ev: Event) {
-            if (document.all) {  //只有ie识别
-                ev.cancelBubble = true;//阻止冒泡
-                ev.returnValue = false;//阻止默认事件
-            } else {
-                ev.stopPropagation();//阻止冒泡
-                ev.preventDefault();//阻止默认事件
-            }
-        }
-
-        createScene(): irender.IVMessageScene {
-            let rtValue = new VScene(this.gl, this.width, this.height, this.programMngr, this.bufferMngr, this.idxMngr, this.textureMngr, this.texImgMngr, this.fboColorTexMngr, this.fboDepthTexMngr);
-            this.sceneList.push(rtValue);
-            return rtValue;
+        private sortboard() {
+            this.boardList.sort((a: VBoard, b: VBoard) => { return a.layer - b.layer; });
         }
 
         render() {
+            window.requestAnimationFrame(() => {
+                this.sortboard();
+
+                this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, null);
+                for (let i = 0; i < this.boardList.length; i++) {
+                    this.boardList[i].render();
+                }
+            });
+        }
+
+        clean(rgba:[number,number,number,number] = [1,1,1,1]) {
             this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, null);
-            for (let i = 0; i < this.sceneList.length; i++) {
-                this.sceneList[i].render();
+            this.gl.scissor(0, 0, this.width, this.height);
+            this.gl.viewport(0, 0, this.width, this.height);
+            this.gl.clearColor(rgba[0], rgba[1], rgba[2], rgba[3]);
+            this.gl.clear(this.gl.COLOR_BUFFER_BIT);
+        }
+
+        createBoard(): irender.IVBoard {
+            let rtValue = new VBoard(this.gl, this.width, this.height, this.renderTool);
+            this.boardList.push(rtValue);
+            return rtValue;
+        }
+
+        deleteBoard(board: irender.IVBoard) {
+            for (let i = 0; i < this.boardList.length; i++) {
+                if (this.boardList[i] === board) {
+                    this.boardList = this.boardList.splice(i, 1);
+                    return;
+                }
             }
+        }
+
+        calPos(pos: irender.VSGlPos): [irender.IVBoard, irender.VSGlPos] | null {
+            this.sortboard();
+
+            for (let i = 0; i < this.boardList.length; i++) {
+                let subpos = this.boardList[i].posAt(pos);
+                if (subpos) {
+                    return [this.boardList[i], subpos];
+                }
+            }
+
+            return null;
         }
 
         changeSize(width: number, height: number) {
             this.width = width;
             this.height = height;
-            for (let i = 0; i < this.sceneList.length; i++) {
-                this.sceneList[i].setSize(width, height);
-            }
-            if (this.onresize != null) {
-                this.onresize(this.width, this.height);
+            for (let i = 0; i < this.boardList.length; i++) {
+                this.boardList[i].setParentSize(width, height);
+                this.boardList[i].dirty();
             }
         }
 
-        calMouseEvent(evt: MouseEvent) : VPos {
-            let mx = evt.offsetX;//evt.clientX - this.canvas.getBoundingClientRect().left;
-            let my = this.canvas.getBoundingClientRect().height - evt.offsetY;//this.canvas.getBoundingClientRect().bottom - evt.clientY;
-            return { v: true, x: mx, y: my };
+        getPixels(): Float32Array {
+            let rtValue = new Float32Array(this.width * this.height * 4);
+
+            this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, null);
+            this.gl.readPixels(0, 0, this.width, this.height, this.gl.RGBA, this.gl.FLOAT, rtValue);
+
+            return rtValue;
         }
 
-        calTouchEvent(evt: Touch): VPos {
-            let mx = evt.clientX - this.canvas.getBoundingClientRect().left;
-            let my = this.canvas.getBoundingClientRect().bottom - evt.clientY;
-            return { v: true, x: mx, y: my };
-        }
+        getPixelColorUI(pt: irender.VSGlPos): vector.VNVector3UI | null {
+            if (pt.x >= this.width || pt.y >= this.height || pt.x < 0 || pt.y < 0)
+                return null;
 
-        dispatchNoneEvt(func: () => void) {
-            for (let i = 0; i < this.sceneList.length; i++) {
-                func.call(this.sceneList[i]);
-            }
-        }
+            let rtValue = new Float32Array(4);
+            this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, null);
+            this.gl.readPixels(pt.x, pt.y, 1, 1, this.gl.RGBA, this.gl.FLOAT, rtValue);
 
-        dispatchMouseEvt(func: (evt: irender.IVMouseEvt) => void, evt: irender.IVMouseEvt) {
-            for (let i = 0; i < this.sceneList.length; i++) {
-                func.call(this.sceneList[i], { x: evt.x, y: evt.y });
-            }
-        }
-
-        dispatchWheelEvt(func: (evt: irender.IVWheelEvt, pos: VPos) => void, evt: irender.IVWheelEvt, pos: VPos) {
-            for (let i = 0; i < this.sceneList.length; i++) {
-                func.call(this.sceneList[i], evt, pos);
-            }
-        }
-        
-        onMessageTouch(evt: TouchEvent, cancel: boolean = false) {
-            if (cancel) {
-                if (this.oldtouchList != null) {
-                    let pos = this.calTouchEvent(this.oldtouchList[0]);
-                    this.dispatchMouseEvt(VScene.prototype.dispatchLeftUp, pos);
-                    this.dispatchMouseEvt(VScene.prototype.dispatchRightUp, pos);
-                }
-                this.moving = false;
-                this.oldtouchList = null;
-            } else {
-                let newtouchList = evt.touches;
-                if (newtouchList.length == 1) {
-                    let pos = this.calTouchEvent(evt.touches[0]);
-                    if (this.oldtouchList != null) {
-                        this.dispatchMouseEvt(VScene.prototype.dispatchMove, pos);
-                    } else {
-                        this.dispatchMouseEvt(VScene.prototype.dispatchLeftDown, pos);
-                    }
-                } else if (newtouchList.length >= 2) {
-                    if (this.oldtouchList != null) {
-                        let pos = this.calTouchEvent(this.oldtouchList[0]);
-                        this.dispatchMouseEvt(VScene.prototype.dispatchLeftUp, pos);
-                    }
-
-                    if (this.oldtouchList == null) {
-                    } else if (this.oldtouchList.length == 1) {
-                        let pos = this.calTouchEvent(evt.touches[0]);
-                        this.dispatchMouseEvt(VScene.prototype.dispatchLeftUp, pos);
-                    } else {
-                        let oldpos1 = this.calTouchEvent(this.oldtouchList[0]);
-                        let oldpos2 = this.calTouchEvent(this.oldtouchList[1]);
-                        let newpos1 = this.calTouchEvent(evt.touches[0]);
-                        let newpos2 = this.calTouchEvent(evt.touches[1]);
-                        let deltx1 = newpos1.x - oldpos1.x;
-                        let deltx2 = newpos2.x - oldpos2.x;
-                        let delty1 = newpos1.y - oldpos1.y;
-                        let delty2 = newpos2.y - oldpos2.y;
-
-                        if ((deltx1 * deltx2 < 0) || (delty1 * delty2 < 0)) {
-                            this.moving = false;
-                            this.dispatchMouseEvt(VScene.prototype.dispatchRightUp, oldpos1);
-                            let delt = 0.02;
-                            let oldx = oldpos2.x - oldpos1.x;
-                            let oldy = oldpos2.y - oldpos1.y;
-                            let oldlen = oldx * oldx + oldy * oldy;
-                            let newx = newpos2.x - newpos1.x;
-                            let newy = newpos2.y - newpos1.y;
-                            let newlen = newx * newx + newy * newy;
-                            if (newlen > oldlen) {
-                                delt *= -1;
-                            }
-                            this.dispatchWheelEvt(VScene.prototype.dispatchWheel, { deltY: delt }, oldpos1);
-                        } else {
-                            if (this.moving == false) {
-                                this.moving = true;
-                                this.dispatchMouseEvt(VScene.prototype.dispatchRightDown, newpos1);
-                            } else {
-                                this.dispatchMouseEvt(VScene.prototype.dispatchMove, newpos1);
-                            }
-                        }
-                    }
-                }
-                this.oldtouchList = newtouchList;
-            }
-        }
-
-        listenResize(onresizeRender: (width: number, height: number) => void | null) {
-            this.onresize = onresizeRender;
+            return new vector.VFVector3(Math.round(rtValue[0] * 255), Math.round(rtValue[1] * 255), Math.round(rtValue[2] * 255));
         }
     }
 
-    class VFBORenderTarget implements irender.IVNewRenderTarget {
-        width: number;
-        height: number;
+    class VFBORenderTarget implements irender.IVOffscreenRenderTarget {
         fbo: WebGLFramebuffer;
         colorTextureArray: VColorAttachment[];
         depthTexture: VDepthAttachment;
         drawBuffers: number[];
-        sceneList: Array<VScene>;
+        boardList: Array<VBoard>;
         
-        constructor(private gl: WebGLRenderingContext, w: number, h: number
-            , private programMngr: VImpMngr<irender.IVProgram, VProgram>
-            , private bufferMngr: VImpMngr<irender.IVBuffer, VBuffer>
-            , private idxMngr: VImpMngr<irender.IVIndexBuffer, VIndexBuffer>
-            , private textureMngr: VImpMngr<irender.IVTexture2D, VTexture2D>
-            , private texImgMngr: VImpMngr<irender.IVTexture2D, VTextureImage2D>
+        constructor(private gl: WebGLRenderingContext
+            , private ext_WEBGL_draw_buffers: any
+            , public width: number
+            , public height: number
             , private fboColorTexMngr: VImpMngr<irender.IVTexture2D, VColorAttachment>
             , private fboDepthTexMngr: VImpMngr<irender.IVTexture2D, VDepthAttachment>
+            , private renderTool: VRenderTool
         ) {
-            this.width = w;
-            this.height = h;
-            this.sceneList = new Array<VScene>();
+            this.boardList = new Array<VBoard>();
             this.fbo = <WebGLFramebuffer>gl.createFramebuffer();
             this.colorTextureArray = new Array<VColorAttachment>();
             this.drawBuffers = new Array<number>();
             this.useColorTexture(1);
-            this.depthTexture = new VDepthAttachment(gl, w, h, fboDepthTexMngr);
+            this.depthTexture = new VDepthAttachment(gl, width, height, fboDepthTexMngr);
             gl.bindTexture(gl.TEXTURE_2D, this.depthTexture.texture);
             gl.bindFramebuffer(gl.FRAMEBUFFER, this.fbo);
             gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.TEXTURE_2D, this.depthTexture.texture, 0);
             gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+        }
+
+        private sortboard() {
+            this.boardList.sort((a: VBoard, b: VBoard) => { return a.layer - b.layer; });
+        }
+
+        render() {
+            this.sortboard();
+
+            this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, this.fbo);
+            this.ext_WEBGL_draw_buffers.drawBuffersWEBGL(this.drawBuffers);
+            for (let i = 0; i < this.boardList.length; i++) {
+                this.boardList[i].render();
+            }
+        }
+
+        clean(rgba: [number, number, number, number] = [1, 1, 1, 1]) {
+            this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, this.fbo);
+            this.gl.scissor(0, 0, this.width, this.height);
+            this.gl.viewport(0, 0, this.width, this.height);
+            this.gl.clearColor(rgba[0], rgba[1], rgba[2], rgba[3]);
+            this.gl.clear(this.gl.COLOR_BUFFER_BIT);
+        }
+
+        createBoard(): irender.IVBoard {
+            let rtValue = new VBoard(this.gl, this.width, this.height, this.renderTool);
+            this.boardList.push(rtValue);
+            return rtValue;
+        }
+
+        deleteBoard(board: irender.IVBoard) {
+            for (let i = 0; i < this.boardList.length; i++) {
+                if (this.boardList[i] === board) {
+                    this.boardList = this.boardList.splice(i, 1);
+                    return;
+                }
+            }
         }
 
         delete() {
@@ -1021,10 +864,35 @@ module renderbase {
             this.gl.deleteFramebuffer(this.fbo);
         }
 
-        createScene(): irender.IVScene {
-            let rtValue = new VScene(this.gl, this.width, this.height, this.programMngr, this.bufferMngr, this.idxMngr, this.textureMngr, this.texImgMngr, this.fboColorTexMngr, this.fboDepthTexMngr);
-            this.sceneList.push(rtValue);
+        calPos(pos: irender.VSGlPos): [irender.IVBoard, irender.VSGlPos] | null {
+            this.sortboard();
+
+            for (let i = 0; i < this.boardList.length; i++) {
+                let subpos = this.boardList[i].posAt(pos);
+                if (subpos) {
+                    return [this.boardList[i], subpos];
+                }
+            }
+
+            return null;
+        }
+
+        getPixels(): Float32Array {
+            let rtValue = new Float32Array(this.width * this.height * 4);
+
+            this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, this.fbo);
+            this.gl.readPixels(0, 0, this.width, this.height, this.gl.RGBA, this.gl.FLOAT, rtValue);
             return rtValue;
+        }
+
+        getPixelColorUI(pt: vector.VNVector2UI): vector.VNVector3UI | null {
+            if (pt.x >= this.width || pt.y >= this.height)
+                return null;
+
+            let rtValue = new Float32Array(4);
+            this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, this.fbo);
+            this.gl.readPixels(pt.x, pt.y, 1, 1, this.gl.RGBA, this.gl.FLOAT, rtValue);
+            return new vector.VFVector3(Math.round(rtValue[0] * 255), Math.round(rtValue[1] * 255), Math.round(rtValue[2] * 255));
         }
 
         useColorTexture(count: number): irender.IVTexture2D[] {
@@ -1036,43 +904,26 @@ module renderbase {
                 return rtValue;
             }
 
-            let ext = extChecker.alertCheck("WEBGL_draw_buffers");
-
-            if (ext != null) {
-                for (let i = 0; i < this.colorTextureArray.length; i++) {
-                    this.colorTextureArray[i].delete();
-                }
-                this.colorTextureArray.splice(0, this.colorTextureArray.length);
-                this.drawBuffers.splice(0, this.drawBuffers.length);
-                for (let i = 0; i < count; i++) {
-                    let colorTexture = new VColorAttachment(this.gl, this.width, this.height, this.fboColorTexMngr);
-                    this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, this.fbo);
-                    this.gl.bindTexture(this.gl.TEXTURE_2D, colorTexture.texture);
-                    this.gl.framebufferTexture2D(this.gl.FRAMEBUFFER, ext.COLOR_ATTACHMENT0_WEBGL + i, this.gl.TEXTURE_2D, colorTexture.texture, 0);
-                    this.drawBuffers.push(ext.COLOR_ATTACHMENT0_WEBGL + i);
-                    this.colorTextureArray.push(colorTexture);
-                }
-                this.gl.bindTexture(this.gl.TEXTURE_2D, null);
-                this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, null);
-                return this.colorTextureArray;
+            for (let i = 0; i < this.colorTextureArray.length; i++) {
+                this.colorTextureArray[i].delete();
             }
-            else
-                return [];
+            this.colorTextureArray.splice(0, this.colorTextureArray.length);
+            this.drawBuffers.splice(0, this.drawBuffers.length);
+            for (let i = 0; i < count; i++) {
+                let colorTexture = new VColorAttachment(this.gl, this.width, this.height, this.fboColorTexMngr);
+                this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, this.fbo);
+                this.gl.bindTexture(this.gl.TEXTURE_2D, colorTexture.texture);
+                this.gl.framebufferTexture2D(this.gl.FRAMEBUFFER, this.ext_WEBGL_draw_buffers.COLOR_ATTACHMENT0_WEBGL + i, this.gl.TEXTURE_2D, colorTexture.texture, 0);
+                this.drawBuffers.push(this.ext_WEBGL_draw_buffers.COLOR_ATTACHMENT0_WEBGL + i);
+                this.colorTextureArray.push(colorTexture);
+            }
+            this.gl.bindTexture(this.gl.TEXTURE_2D, null);
+            this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, null);
+            return this.colorTextureArray;
         }
 
         useDepthTexture(): irender.IVTexture2D {
             return this.depthTexture;
-        }
-
-        render() {
-            let ext = extChecker.alertCheck("WEBGL_draw_buffers");
-            if (ext != null) {
-                this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, this.fbo);
-                ext.drawBuffersWEBGL(this.drawBuffers);
-                for (let i = 0; i < this.sceneList.length; i++) {
-                    this.sceneList[i].render();
-                }
-            }
         }
 
         resize(width: number, height: number) {
@@ -1084,28 +935,10 @@ module renderbase {
             }
             this.depthTexture.resize(width, height);
 
-            for (let i = 0; i < this.sceneList.length; i++) {
-                this.sceneList[i].setSize(width, height);
-                this.sceneList[i].dirty();
+            for (let i = 0; i < this.boardList.length; i++) {
+                this.boardList[i].setParentSize(width, height);
+                this.boardList[i].dirty();
             }
-        }
-
-        getPixels(): Float32Array {
-            let rtValue = new Float32Array(this.width * this.height * 4);
-
-            this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, this.fbo);
-            this.gl.readPixels(0, 0, this.width, this.height, this.gl.RGBA, this.gl.FLOAT, rtValue);
-            return rtValue;
-        }
-
-        getPixelColorUI(pt: vector.VNVector2UI): vector.VNVector3UI | null{
-            if (pt.x >= this.width || pt.y >= this.height)
-                return null;
-
-            let rtValue = new Float32Array(4);
-            this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, this.fbo);
-            this.gl.readPixels(pt.x, pt.y, 1, 1, this.gl.RGBA, this.gl.FLOAT, rtValue);
-            return new vector.VFVector3(Math.round(rtValue[0] * 255), Math.round(rtValue[1] * 255), Math.round(rtValue[2] * 255));
         }
     }
 
@@ -1119,48 +952,62 @@ module renderbase {
         textureImgMngr: VImpMngr<irender.IVTexture2D, VTextureImage2D>
         fboColorTexMngr: VImpMngr<irender.IVTexture2D, VColorAttachment>;
         fboDepthTexMngr: VImpMngr<irender.IVTexture2D, VDepthAttachment>;
+        renderTool: VRenderTool;
 
-        constructor(private renderElem: HTMLCanvasElement, width: number, height: number) {
-            renderElem.width = width;
-            renderElem.height = height;
-            renderElem.style.width = width.toString() + "px";
-            renderElem.style.height = height.toString() + "px";
-
-            let webgl = renderElem.getContext('webgl', { preserveDrawingBuffer: true });
-            if (webgl == null)
-                webgl = renderElem.getContext('experimental-webgl', { preserveDrawingBuffer: true });
-            if (webgl != null) {
-                this.bufferMngr = new VImpMngr<irender.IVBuffer, VBuffer>();
-                this.indexMngr = new VImpMngr<irender.IVIndexBuffer, VIndexBuffer>();
-                this.textureMngr = new VImpMngr<irender.IVTexture2D, VTexture2D>();
-                this.textureImgMngr = new VImpMngr<irender.IVTexture2D, VTextureImage2D>();
-                this.fboColorTexMngr = new VImpMngr<irender.IVTexture2D, VColorAttachment>();
-                this.fboDepthTexMngr = new VImpMngr<irender.IVTexture2D, VDepthAttachment>();
-                this.programMngr = new VImpMngr<irender.IVProgram, VProgram>();
-                this.gl = webgl;
-                this.initState();
-                extChecker = new VExtensionChecker(this.gl);
-                this.defaultRenderTarget = new VDefaultRenderTarget(this.gl, this.programMngr, this.bufferMngr, this.indexMngr, this.textureMngr, this.textureImgMngr, this.fboColorTexMngr, this.fboDepthTexMngr, renderElem);
-            }
-            else {
-                console.error("can not get context from :" + renderElem.nodeName);
-            }
-
-            //window.addEventListener('resize', () => {
-            //    renderElem.width = renderElem.clientWidth;
-            //    renderElem.height = renderElem.clientHeight;
-            //    this.defaultRenderTarget.changeSize(renderElem.width, renderElem.height);
-            //});
-
+        constructor(private renderElem: HTMLCanvasElement) {
+            renderElem.width = renderElem.clientWidth;
+            renderElem.height = renderElem.clientHeight;
+            renderElem.style.width = renderElem.clientWidth.toString() + "px";
+            renderElem.style.height = renderElem.clientHeight.toString() + "px";
             renderElem.oncontextmenu = () => { return false; }
+
+            let webgl = renderElem.getContext('experimental-webgl', { preserveDrawingBuffer: true });
+            if (webgl == null)
+                webgl = renderElem.getContext('webgl', { preserveDrawingBuffer: true });
+            if (webgl != null) {
+                this.gl = webgl;
+                extChecker = new VExtensionChecker(this.gl);
+                if (this.CheckState())
+                {
+                    this.bufferMngr = new VImpMngr<irender.IVBuffer, VBuffer>();
+                    this.indexMngr = new VImpMngr<irender.IVIndexBuffer, VIndexBuffer>();
+                    this.programMngr = new VImpMngr<irender.IVProgram, VProgram>();
+                    this.textureMngr = new VImpMngr<irender.IVTexture2D, VTexture2D>();
+                    this.textureImgMngr = new VImpMngr<irender.IVTexture2D, VTextureImage2D>();
+                    this.fboColorTexMngr = new VImpMngr<irender.IVTexture2D, VColorAttachment>();
+                    this.fboDepthTexMngr = new VImpMngr<irender.IVTexture2D, VDepthAttachment>();
+                    this.renderTool = new VRenderTool(this.gl, this.programMngr, this.bufferMngr, this.indexMngr, this.textureMngr, this.textureImgMngr, this.fboColorTexMngr, this.fboDepthTexMngr);
+
+                    this.gl.enable(this.gl.SCISSOR_TEST);
+                    this.defaultRenderTarget = new VDefaultRenderTarget(this.gl, renderElem.clientWidth, renderElem.clientHeight, this.renderTool);
+
+                    return;
+                }
+            } 
+
+            console.error("Browser can not use this render base system.");
         }
 
-        private initState() {
-            this.gl.enable(this.gl.SCISSOR_TEST);
+        private CheckState(): boolean {
+            let ext_OES_texture_float = extChecker.tryuseExtension("OES_texture_float");
+            let ext_OES_texture_float_linear = extChecker.tryuseExtension('OES_texture_float_linear');
+            let ext_OES_element_index_uint = extChecker.tryuseExtension("OES_element_index_uint");
+
+            return (ext_OES_texture_float != null)
+                && (ext_OES_texture_float_linear != null)
+                && (ext_OES_element_index_uint != null);
         }
 
-        createRenderTarget(width: number, height: number): irender.IVNewRenderTarget {
-            return new VFBORenderTarget(this.gl, width, height, this.programMngr, this.bufferMngr, this.indexMngr, this.textureMngr, this.textureImgMngr, this.fboColorTexMngr, this.fboDepthTexMngr);
+        createRenderTarget(width: number, height: number): irender.IVOffscreenRenderTarget | null {
+            let ext_WEBGL_draw_buffers = extChecker.tryuseExtension("WEBGL_draw_buffers");
+            let ext_WEBGL_depth_texture = extChecker.tryuseExtension('WEBGL_depth_texture');
+
+            if (ext_WEBGL_draw_buffers != null && ext_WEBGL_depth_texture != null)
+            {
+                return new VFBORenderTarget(this.gl, ext_WEBGL_draw_buffers, width, height, this.fboColorTexMngr, this.fboDepthTexMngr, this.renderTool);
+            } else {
+                return null;
+            }
         }
 
         createProgram(vertexShaderData: string, fragmentShaderData: string): irender.IVProgram {
@@ -1181,14 +1028,6 @@ module renderbase {
 
         createTextureImage(image: ImageBitmap | ImageData | HTMLVideoElement | HTMLImageElement | HTMLCanvasElement) :irender.IVTexture2D{
             return new VTextureImage2D(this.gl, image, this.textureImgMngr);
-        }
-
-        resize(width: number, height: number) {
-            this.renderElem.width = width;
-            this.renderElem.height = height;
-            this.renderElem.style.width = width.toString() + "px";
-            this.renderElem.style.height = height.toString() + "px";
-            this.defaultRenderTarget.changeSize(this.renderElem.width, this.renderElem.height);
         }
 
         sync() {
@@ -1218,6 +1057,14 @@ module renderbase {
             for (let i = 0; i < this.programMngr.list.length; i++) {
                 this.programMngr.list[i].delete();
             }
+        }
+
+        resize(width: number, height: number) {
+            this.renderElem.width = width;
+            this.renderElem.height = height;
+            this.renderElem.style.width = width.toString() + "px";
+            this.renderElem.style.height = height.toString() + "px";
+            this.defaultRenderTarget.changeSize(width, height);
         }
     }
 }
